@@ -544,11 +544,9 @@ void LibStrncmp(struct ParseState *Parser, struct Value *ReturnValue, struct Val
     ReturnValue->Val->Integer = 0;
 }
 
-void LibStrcat(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
-{
+void LibStrcat(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs){
     char *To = (char *)Param[0]->Val->Pointer;
     char *From = (char *)Param[1]->Val->Pointer;
-    
     while (*To != '\0')
         To++;
     
@@ -571,43 +569,31 @@ void LibIndex(struct ParseState *Parser, struct Value *ReturnValue, struct Value
     else
         ReturnValue->Val->Pointer = Pos;
 }
-
-void LibRindex(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
-{
+void LibRindex(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs){
     char *Pos = (char *)Param[0]->Val->Pointer;
     int SearchChar = Param[1]->Val->Integer;
-
     ReturnValue->Val->Pointer = NULL;
-    for (; *Pos != '\0'; Pos++)
-    {
-        if (*Pos == SearchChar)
-            ReturnValue->Val->Pointer = Pos;
+    for (; *Pos != '\0'; Pos++){
+        if (*Pos == SearchChar) ReturnValue->Val->Pointer = Pos;
     }
 }
-
 void LibStrlen(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
     char *Pos = (char *)Param[0]->Val->Pointer;
     int Len;
-    
-    for (Len = 0; *Pos != '\0'; Pos++)
-        Len++;
-    
+    for (Len = 0; *Pos != '\0'; Pos++) Len++;
     ReturnValue->Val->Integer = Len;
 }
-
 void LibMemset(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
     /* we can use the system memset() */
     memset(Param[0]->Val->Pointer, Param[1]->Val->Integer, Param[2]->Val->Integer);
 }
-
 void LibMemcpy(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
     /* we can use the system memcpy() */
     memcpy(Param[0]->Val->Pointer, Param[1]->Val->Pointer, Param[2]->Val->Integer);
 }
-
 void LibMemcmp(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs)
 {
     unsigned char *Mem1 = (unsigned char *)Param[0]->Val->Pointer;

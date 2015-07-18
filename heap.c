@@ -6,8 +6,7 @@
 #include "interpreter.h"
 
 #ifdef DEBUG_HEAP
-void ShowBigList(Picoc *pc)
-{
+void ShowBigList(Picoc *pc){
     struct AllocNode *LPos;
     printf("Heap: bottom=0x%lx 0x%lx-0x%lx, big freelist=", (long)pc->HeapBottom, (long)&(pc->HeapMemory)[0], (long)&(pc->HeapMemory)[HEAP_SIZE]);
     for (LPos = pc->FreeListBig; LPos != NULL; LPos = LPos->NextFree)
@@ -16,8 +15,7 @@ void ShowBigList(Picoc *pc)
 }
 #endif
 /* initialise the stack and heap storage */
-void HeapInit(Picoc *pc, int StackOrHeapSize)
-{
+void HeapInit(Picoc *pc, int StackOrHeapSize){
     int Count;
     int AlignOffset = 0;
 #ifdef USE_MALLOC_STACK
@@ -46,8 +44,7 @@ void HeapInit(Picoc *pc, int StackOrHeapSize)
     pc->FreeListBig = NULL;
     for (Count = 0; Count < FREELIST_BUCKETS; Count++) pc->FreeListBucket[Count] = NULL;
 }
-void HeapCleanup(Picoc *pc)
-{
+void HeapCleanup(Picoc *pc){
 #ifdef USE_MALLOC_STACK
     free(pc->HeapMemory);
 #endif
@@ -120,7 +117,7 @@ void *HeapAllocMem(Picoc *pc, int Size){
     /* make sure we have enough space for an AllocNode */
     if (AllocSize < sizeof(struct AllocNode)) AllocSize = sizeof(struct AllocNode);
     Bucket = AllocSize >> 2;
-    if (Bucket < FREELIST_BUCKETS && pc->FreeListBucket[Bucket] != NULL){ 
+    if (Bucket < FREELIST_BUCKETS && pc->FreeListBucket[Bucket]){ 
         /* try to allocate from a freelist bucket first */
 #ifdef DEBUG_HEAP
         printf("allocating %d(%d) from bucket", Size, AllocSize);
@@ -131,11 +128,11 @@ void *HeapAllocMem(Picoc *pc, int Size){
         assert(pc->FreeListBucket[Bucket] == NULL || ((unsigned long)pc->FreeListBucket[Bucket] >= (unsigned long)&(pc->HeapMemory)[0] && (unsigned char *)pc->FreeListBucket[Bucket] - &(pc->HeapMemory)[0] < HEAP_SIZE));
         NewMem->Size = AllocSize;
     }
-    else if (pc->FreeListBig != NULL){ 
+    else if (pc->FreeListBig){ 
         /* grab the first item from the "big" freelist we can fit in */
-        for (FreeNode = &pc->FreeListBig; *FreeNode != NULL && (*FreeNode)->Size < AllocSize; FreeNode = &(*FreeNode)->NextFree)
+        for (FreeNode = &pc->FreeListBig; *FreeNode && (*FreeNode)->Size < AllocSize; FreeNode = &(*FreeNode)->NextFree)
         {}
-        if (*FreeNode != NULL){
+        if (*FreeNode){
             assert((unsigned long)*FreeNode >= (unsigned long)&(pc->HeapMemory)[0] && (unsigned char *)*FreeNode - &(pc->HeapMemory)[0] < HEAP_SIZE);
             assert((*FreeNode)->Size < HEAP_SIZE && (*FreeNode)->Size > 0);
             if ((*FreeNode)->Size < AllocSize + SPLIT_MEM_THRESHOLD){ 
@@ -204,7 +201,7 @@ void HeapFreeMem(Picoc *pc, void *Mem){
 #ifdef DEBUG_HEAP
         printf("freeing %d to bucket\n", MemNode->Size);
 #endif
-        assert(pc->FreeListBucket[Bucket] == NULL || ((unsigned long)pc->FreeListBucket[Bucket] >= (unsigned long)&(pc->HeapMemory)[0] && (unsigned char *)FreeListBucket[Bucket] - &HeapMemory[0] < HEAP_SIZE));
+        assert(!pc->FreeListBucket[Bucket] || ((unsigned long)pc->FreeListBucket[Bucket] >= (unsigned long)&(pc->HeapMemory)[0] && (unsigned char *)FreeListBucket[Bucket] - &HeapMemory[0] < HEAP_SIZE));
         *(struct AllocNode **)MemNode = pc->FreeListBucket[Bucket];
         pc->FreeListBucket[Bucket] = (struct AllocNode *)MemNode;
     }else{ 
@@ -212,7 +209,7 @@ void HeapFreeMem(Picoc *pc, void *Mem){
 #ifdef DEBUG_HEAP
         printf("freeing %lx:%d to freelist\n", (unsigned long)Mem, MemNode->Size);
 #endif
-        assert(pc->FreeListBig == NULL || ((unsigned long)pc->FreeListBig >= (unsigned long)&(pc->HeapMemory)[0] && (unsigned char *)pc->FreeListBig - &(pc->HeapMemory)[0] < HEAP_SIZE));
+        assert(!pc->FreeListBig || ((unsigned long)pc->FreeListBig >= (unsigned long)&(pc->HeapMemory)[0] && (unsigned char *)pc->FreeListBig - &(pc->HeapMemory)[0] < HEAP_SIZE));
         MemNode->NextFree = pc->FreeListBig;
         FreeListBig = MemNode;
 #ifdef DEBUG_HEAP
