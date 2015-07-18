@@ -47,6 +47,7 @@ static struct ReservedWord ReservedWords[] =
     { "break", TokenBreak },
     { "case", TokenCase },
     { "char", TokenCharType },
+    { "complex",TokenComplex},
     { "continue", TokenContinue },
     { "default", TokenDefault },
     { "delete", TokenDelete },
@@ -133,8 +134,8 @@ enum LexToken LexGetNumber(Picoc *pc, struct LexState *Lexer, struct Value *Valu
     long Base = 10;
     enum LexToken ResultToken;
 #ifndef NO_FP
-    double FPResult;
-    double FPDiv;
+    long double FPResult;
+    long double FPDiv;
 #endif
     /* long/unsigned flags */
 #if 0 /* unused for now */
@@ -171,7 +172,6 @@ enum LexToken LexGetNumber(Picoc *pc, struct LexState *Lexer, struct Value *Valu
         LEXER_INC(Lexer);
         /* IsLong = 1; */
     }
-    
     Value->Typ = &pc->LongType; /* ignored? */
     Value->Val->LongInteger = Result;
 
@@ -181,23 +181,17 @@ enum LexToken LexGetNumber(Picoc *pc, struct LexState *Lexer, struct Value *Valu
         return ResultToken;
         
 #ifndef NO_FP
-    if (Lexer->Pos == Lexer->End)
-    {
-        return ResultToken;
-    }
-    
     if (*Lexer->Pos != '.' && *Lexer->Pos != 'e' && *Lexer->Pos != 'E')
     {
         return ResultToken;
     }
     
-    Value->Typ = &pc->FPType;
-    FPResult = (double)Result;
-    
+    FPResult = (long double)Result;
     if (*Lexer->Pos == '.')
     {
         LEXER_INC(Lexer);
-        for (FPDiv = 1.0/Base; Lexer->Pos != Lexer->End && IS_BASE_DIGIT(*Lexer->Pos, Base); LEXER_INC(Lexer), FPDiv /= (double)Base)
+        FPDiv = 1.0/Base;
+        for (; Lexer->Pos != Lexer->End && IS_BASE_DIGIT(*Lexer->Pos, Base); LEXER_INC(Lexer), (FPDiv /= (long double)Base))
         {
             FPResult += GET_BASE_DIGIT(*Lexer->Pos) * FPDiv;
         }
@@ -221,18 +215,27 @@ enum LexToken LexGetNumber(Picoc *pc, struct LexState *Lexer, struct Value *Valu
             LEXER_INC(Lexer);
         }
 
-        FPResult *= pow((double)Base, (double)Result * ExponentSign);
+        FPResult *= powl((long double)Base, (long double)Result * ExponentSign);
     }
     
-    Value->Val->FP = FPResult;
-
-    if (*Lexer->Pos == 'f' || *Lexer->Pos == 'F')
+    if (*Lexer->Pos == 'f' || *Lexer->Pos == 'F'){
         LEXER_INC(Lexer);
+        Value->Typ = &pc->FP32Type;
+//        FP32Result = (float)Result;
+        Value->Val->FP32 = (float)FPResult;
+        return TokenFP32Constant;
+    }else if(*Lexer->Pos == 'l' || *Lexer->Pos == 'L'){
+      Value->Val->FP128 = FPResult;
+      Value->Typ       = &pc->FP128Type;
+      return TokenFP128Constant;
+    }else{
+      Value->Val->FP64 = FPResult;
+      Value->Typ       = &pc->FP64Type;
+      return TokenFP64Constant;
 
-    return TokenFPConstant;
-#else
-    return ResultToken;
+}
 #endif
+    return ResultToken;
 }
 
 /* get a reserved word or identifier - used while scanning */
@@ -517,7 +520,9 @@ int LexTokenSize(enum LexToken Token)
         case TokenIdentifier: case TokenStringConstant: return sizeof(char *);
         case TokenIntegerConstant: return sizeof(long);
         case TokenCharacterConstant: return sizeof(unsigned char);
-        case TokenFPConstant: return sizeof(double);
+        case TokenFP32Constant: return sizeof(float);
+        case TokenFP64Constant: return sizeof(double);
+        case TokenFP128Constant: return sizeof(long double);
         default: return 0;
     }
 }
@@ -721,7 +726,9 @@ enum LexToken LexGetRawToken(struct ParseState *Parser, struct Value **Value, in
                 case TokenIntegerConstant:      pc->LexValue.Typ = &pc->LongType; break;
                 case TokenCharacterConstant:    pc->LexValue.Typ = &pc->CharType; break;
 #ifndef NO_FP
-                case TokenFPConstant:           pc->LexValue.Typ = &pc->FPType; break;
+                case TokenFP32Constant:           pc->LexValue.Typ = &pc->FP32Type; break;
+                case TokenFP64Constant:           pc->LexValue.Typ = &pc->FP64Type; break;
+                case TokenFP128Constant:           pc->LexValue.Typ = &pc->FP128Type; break;
 #endif
                 default: break;
             }

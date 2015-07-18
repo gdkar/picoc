@@ -13,53 +13,46 @@
 #define TRUE 1
 #define FALSE 0
 #endif
-
 #ifndef NULL
-#define NULL 0
+#define NULL (void*)0
 #endif
-
 #ifndef min
 #define min(x,y) (((x)<(y))?(x):(y))
 #endif
-
 #define MEM_ALIGN(x) (((x) + sizeof(ALIGN_TYPE) - 1) & ~(sizeof(ALIGN_TYPE)-1))
-
 #define GETS_BUF_MAX 256
-
 /* for debugging */
 #define PRINT_SOURCE_POS ({ PrintSourceTextErrorLine(Parser->pc->CStdOut, Parser->FileName, Parser->SourceText, Parser->Line, Parser->CharacterPos); PlatformPrintf(Parser->pc->CStdOut, "\n"); })
 #define PRINT_TYPE(typ) PlatformPrintf(Parser->pc->CStdOut, "%t\n", typ);
-
 /* small processors use a simplified FILE * for stdio, otherwise use the system FILE * */
 #ifdef BUILTIN_MINI_STDLIB
 typedef struct OutputStream IOFILE;
 #else
 typedef FILE IOFILE;
 #endif
-
 /* coercion of numeric types to other numeric types */
 #ifndef NO_FP
-#define IS_FP(v) ((v)->Typ->Base == TypeFP)
-#define FP_VAL(v) ((v)->Val->FP)
+#define IS_FP128(v) ((v)->Typ->Base == TypeFP128)
+#define IS_FP64(v) ((v)->Typ->Base == TypeFP64)
+#define IS_FP32(v) ((v)->Typ->Base == TypeFP32)
+#define FP32_VAL(v) ((v)->Val->FP32)
+#define FP64_VAL(v) ((v)->Val->FP64)
+#define FP128_VAL(v) ((v)->Val->FP128)
+#define IS_FP(v) (IS_FP64(v)||IS_FP32(v)||IS_FP128(v))
+#define FP_VAL(v) (IS_FP64(v)?FP64_VAL(v):IS_FP128(v)?FP128_VAL(v):FP32_VAL(v))
 #else
 #define IS_FP(v) 0
 #define FP_VAL(v) 0
 #endif
-
 #define IS_POINTER_COERCIBLE(v, ap) ((ap) ? ((v)->Typ->Base == TypePointer) : 0)
 #define POINTER_COERCE(v) ((int)(v)->Val->Pointer)
-
 #define IS_INTEGER_NUMERIC_TYPE(t) ((t)->Base >= TypeInt && (t)->Base <= TypeUnsignedLong)
 #define IS_INTEGER_NUMERIC(v) IS_INTEGER_NUMERIC_TYPE((v)->Typ)
 #define IS_NUMERIC_COERCIBLE(v) (IS_INTEGER_NUMERIC(v) || IS_FP(v))
 #define IS_NUMERIC_COERCIBLE_PLUS_POINTERS(v,ap) (IS_NUMERIC_COERCIBLE(v) || IS_POINTER_COERCIBLE(v,ap))
-
-
 struct Table;
 struct Picoc_Struct;
-
 typedef struct Picoc_Struct Picoc;
-
 /* lexical tokens */
 enum LexToken
 {
@@ -81,25 +74,23 @@ enum LexToken
     /* 0x21 */ TokenIncrement, TokenDecrement, TokenUnaryNot, TokenUnaryExor, TokenSizeof, TokenCast,
     /* 0x27 */ TokenLeftSquareBracket, TokenRightSquareBracket, TokenDot, TokenArrow, 
     /* 0x2b */ TokenOpenBracket, TokenCloseBracket,
-    /* 0x2d */ TokenIdentifier, TokenIntegerConstant, TokenFPConstant, TokenStringConstant, TokenCharacterConstant,
+    /* 0x2d */ TokenIdentifier, TokenIntegerConstant, TokenFP32Constant,TokenFP64Constant,TokenFP128Constant, TokenStringConstant, TokenCharacterConstant,
     /* 0x32 */ TokenSemicolon, TokenEllipsis,
     /* 0x34 */ TokenLeftBrace, TokenRightBrace,
-    /* 0x36 */ TokenIntType, TokenCharType, TokenFloatType, TokenDoubleType, TokenVoidType, TokenEnumType,
+    /* 0x36 */ TokenIntType, TokenCharType, TokenFloatType, TokenDoubleType,TokenLongDoubleType, TokenVoidType, TokenEnumType,
     /* 0x3c */ TokenLongType, TokenSignedType, TokenShortType, TokenStaticType, TokenAutoType, TokenRegisterType, TokenExternType, TokenStructType, TokenUnionType, TokenUnsignedType, TokenTypedef,
-    /* 0x46 */ TokenContinue, TokenDo, TokenElse, TokenFor, TokenGoto, TokenIf, TokenWhile, TokenBreak, TokenSwitch, TokenCase, TokenDefault, TokenReturn,
+    /* 0x46 */ TokenComplex,TokenContinue, TokenDo, TokenElse, TokenFor, TokenGoto, TokenIf, TokenWhile, TokenBreak, TokenSwitch, TokenCase, TokenDefault, TokenReturn,
     /* 0x52 */ TokenHashDefine, TokenHashInclude, TokenHashIf, TokenHashIfdef, TokenHashIfndef, TokenHashElse, TokenHashEndif,
     /* 0x59 */ TokenNew, TokenDelete,
     /* 0x5b */ TokenOpenMacroBracket,
     /* 0x5c */ TokenEOF, TokenEndOfLine, TokenEndOfFunction
 };
-
 /* used in dynamic memory allocation */
 struct AllocNode
 {
     unsigned int Size;
     struct AllocNode *NextFree;
 };
-
 /* whether we're running or skipping code */
 enum RunMode
 {
@@ -111,7 +102,6 @@ enum RunMode
     RunModeContinue,            /* as above but repeat the loop */
     RunModeGoto                 /* searching for a goto label */
 };
-
 /* parser state - has all this detail so we can parse nested files */
 struct ParseState
 {
@@ -129,7 +119,6 @@ struct ParseState
     char DebugMode;             /* debugging mode */
     int ScopeID;                /* for keeping track of local variables (free them after they go out of scope) */
 };
-
 /* values */
 enum BaseType
 {
@@ -138,12 +127,18 @@ enum BaseType
     TypeShort,                  /* short integer */
     TypeChar,                   /* a single character (signed) */
     TypeLong,                   /* long integer */
+    TypeInt128,
     TypeUnsignedInt,            /* unsigned integer */
     TypeUnsignedShort,          /* unsigned short integer */
     TypeUnsignedChar,           /* unsigned 8-bit number */ /* must be before unsigned long */
     TypeUnsignedLong,           /* unsigned long integer */
 #ifndef NO_FP
-    TypeFP,                     /* floating point */
+    TypeFP32,
+    TypeFP64,                     /* floating point */
+    TypeFP128,
+    TypeComplex32,
+    TypeComplex64,
+    TypeComplex128,
 #endif
     TypeFunction,               /* a function */
     TypeMacro,                  /* a macro */
@@ -155,11 +150,18 @@ enum BaseType
     TypeGotoLabel,              /* a label we can "goto" */
     Type_Type                   /* a type for storing types */
 };
-
+enum RegLoc{
+  LocInteger    = 0,
+  LocSSE        = 1,
+  LocX87        = 2,
+  LocComplexX87 = 3,
+  LocMemory     = 4
+};
 /* data type */
 struct ValueType
 {
     enum BaseType Base;             /* what kind of type this is */
+    enum RegLoc Reg;
     int ArraySize;                  /* the size of an array type */
     int Sizeof;                     /* the storage required */
     int AlignBytes;                 /* the alignment boundary of this type */
@@ -181,6 +183,7 @@ struct FuncDef
     struct ValueType **ParamType;   /* array of parameter types */
     char **ParamName;               /* array of parameter names */
     void (*Intrinsic)();            /* intrinsic call address or NULL */
+    void (*Dynamic)();
     struct ParseState Body;         /* lexical tokens of the function body if not intrinsic */
 };
 
@@ -209,7 +212,9 @@ union AnyValue
     struct FuncDef FuncDef;
     struct MacroDef MacroDef;
 #ifndef NO_FP
-    double FP;
+    float  FP32;
+    double FP64;
+    long double FP128;
 #endif
     void *Pointer;                  /* unsafe native pointers */
 };
@@ -420,12 +425,18 @@ struct Picoc_Struct
     struct ValueType ShortType;
     struct ValueType CharType;
     struct ValueType LongType;
+    struct ValueType Int128Type;
     struct ValueType UnsignedIntType;
     struct ValueType UnsignedShortType;
     struct ValueType UnsignedLongType;
     struct ValueType UnsignedCharType;
     #ifndef NO_FP
-    struct ValueType FPType;
+    struct ValueType FP32Type;
+    struct ValueType FP64Type;
+    struct ValueType FP128Type;
+    struct ValueType Complex32Type;
+    struct ValueType Complex64Type;
+    struct ValueType Complex128Type;
     #endif
     struct ValueType VoidType;
     struct ValueType TypeType;
@@ -510,7 +521,8 @@ void ExpressionAssign(struct ParseState *Parser, struct Value *DestValue, struct
 long ExpressionCoerceInteger(struct Value *Val);
 unsigned long ExpressionCoerceUnsignedInteger(struct Value *Val);
 #ifndef NO_FP
-double ExpressionCoerceFP(struct Value *Val);
+float  ExpressionCoerceFP32(struct Value *Val);
+double ExpressionCoerceFP64(struct Value *Val);
 #endif
 
 /* type.c */
@@ -574,7 +586,9 @@ void PrintCh(char OutCh, IOFILE *Stream);
 void PrintSimpleInt(long Num, IOFILE *Stream);
 void PrintInt(long Num, int FieldWidth, int ZeroPad, int LeftJustify, IOFILE *Stream);
 void PrintStr(const char *Str, IOFILE *Stream);
-void PrintFP(double Num, IOFILE *Stream);
+void PrintFP128(long double Num, IOFILE *Stream);
+void PrintFP64(double Num, IOFILE *Stream);
+void PrintFP32(float Num, IOFILE *Stream);
 void PrintType(struct ValueType *Typ, IOFILE *Stream);
 void LibPrintf(struct ParseState *Parser, struct Value *ReturnValue, struct Value **Param, int NumArgs);
 

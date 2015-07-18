@@ -2,7 +2,7 @@
  * for parsing data types. */
  
 #include "interpreter.h"
-
+#include <xmmintrin.h>
 /* some basic types */
 static int PointerAlignBytes;
 static int IntAlignBytes;
@@ -36,7 +36,6 @@ struct ValueType *TypeGetMatching(Picoc *pc, struct ParseState *Parser, struct V
     struct ValueType *ThisType = ParentType->DerivedTypeList;
     while (ThisType != NULL && (ThisType->Base != Base || ThisType->ArraySize != ArraySize || ThisType->Identifier != Identifier))
         ThisType = ThisType->Next;
-    
     if (ThisType != NULL)
     {
         if (AllowDuplicates)
@@ -44,7 +43,6 @@ struct ValueType *TypeGetMatching(Picoc *pc, struct ParseState *Parser, struct V
         else
             ProgramFail(Parser, "data type '%s' is already defined", Identifier);
     }
-        
     switch (Base)
     {
         case TypePointer:   Sizeof = sizeof(void *); AlignBytes = PointerAlignBytes; break;
@@ -52,7 +50,6 @@ struct ValueType *TypeGetMatching(Picoc *pc, struct ParseState *Parser, struct V
         case TypeEnum:      Sizeof = sizeof(int); AlignBytes = IntAlignBytes; break;
         default:            Sizeof = 0; AlignBytes = 0; break;      /* structs and unions will get bigger when we add members to them */
     }
-
     return TypeAdd(pc, Parser, ParentType, Base, ArraySize, Identifier, Sizeof, AlignBytes);
 }
 
@@ -110,8 +107,10 @@ void TypeInit(Picoc *pc)
     struct ShortAlign { char x; short y; } sa;
     struct CharAlign { char x; char y; } ca;
     struct LongAlign { char x; long y; } la;
+    struct Int128Align{char x; __m128i y;} i128a;
 #ifndef NO_FP
     struct DoubleAlign { char x; double y; } da;
+    struct LongDoubleAlign { char x; long double y; } lda;
 #endif
     struct PointerAlign { char x; void *y; } pa;
     
@@ -123,6 +122,7 @@ void TypeInit(Picoc *pc)
     TypeAddBaseType(pc, &pc->ShortType, TypeShort, sizeof(short), (char *)&sa.y - &sa.x);
     TypeAddBaseType(pc, &pc->CharType, TypeChar, sizeof(char), (char *)&ca.y - &ca.x);
     TypeAddBaseType(pc, &pc->LongType, TypeLong, sizeof(long), (char *)&la.y - &la.x);
+    TypeAddBaseType(pc, &pc->Int128Type, TypeInt128, sizeof(__m128), (char *)&i128a.y - &i128a.x);
     TypeAddBaseType(pc, &pc->UnsignedIntType, TypeUnsignedInt, sizeof(unsigned int), IntAlignBytes);
     TypeAddBaseType(pc, &pc->UnsignedShortType, TypeUnsignedShort, sizeof(unsigned short), (char *)&sa.y - &sa.x);
     TypeAddBaseType(pc, &pc->UnsignedLongType, TypeUnsignedLong, sizeof(unsigned long), (char *)&la.y - &la.x);
@@ -132,8 +132,10 @@ void TypeInit(Picoc *pc)
     TypeAddBaseType(pc, &pc->MacroType, TypeMacro, sizeof(int), IntAlignBytes);
     TypeAddBaseType(pc, &pc->GotoLabelType, TypeGotoLabel, 0, 1);
 #ifndef NO_FP
-    TypeAddBaseType(pc, &pc->FPType, TypeFP, sizeof(double), (char *)&da.y - &da.x);
-    TypeAddBaseType(pc, &pc->TypeType, Type_Type, sizeof(double), (char *)&da.y - &da.x);  /* must be large enough to cast to a double */
+    TypeAddBaseType(pc, &pc->FP32Type, TypeFP32, sizeof(float), (char *)&la.y - &la.x);
+    TypeAddBaseType(pc, &pc->FP64Type, TypeFP64, sizeof(double), (char *)&da.y - &da.x);
+    TypeAddBaseType(pc, &pc->FP128Type, TypeFP128, sizeof(long double), (char *)&lda.y - &lda.x);
+    TypeAddBaseType(pc, &pc->TypeType, Type_Type, sizeof(long double ), (char *)&lda.y - &lda.x);  /* must be large enough to cast to a double */
 #else
     TypeAddBaseType(pc, &pc->TypeType, Type_Type, sizeof(struct ValueType *), PointerAlignBytes);
 #endif
@@ -363,34 +365,30 @@ int TypeParseFront(struct ParseState *Parser, struct ValueType **Typ, int *IsSta
     Token = LexGetToken(Parser, &LexerValue, TRUE);
     while (Token == TokenStaticType || Token == TokenAutoType || Token == TokenRegisterType || Token == TokenExternType)
     {
-        if (Token == TokenStaticType)
-            StaticQualifier = TRUE;
-            
+        if (Token == TokenStaticType) StaticQualifier = TRUE;
         Token = LexGetToken(Parser, &LexerValue, TRUE);
     }
-    
-    if (IsStatic != NULL)
-        *IsStatic = StaticQualifier;
-        
+    if (IsStatic != NULL) *IsStatic = StaticQualifier;
     /* handle signed/unsigned with no trailing type */
-    if (Token == TokenSignedType || Token == TokenUnsignedType)
+    if (Token == TokenSignedType || Token == TokenUnsignedType || Token == TokenLongType)
     {
         enum LexToken FollowToken = LexGetToken(Parser, &LexerValue, FALSE);
         Unsigned = (Token == TokenUnsignedType);
-        
         if (FollowToken != TokenIntType && FollowToken != TokenLongType && FollowToken != TokenShortType && FollowToken != TokenCharType)
         {
-            if (Token == TokenUnsignedType)
-                *Typ = &pc->UnsignedIntType;
-            else
-                *Typ = &pc->IntType;
+            if (Token == TokenUnsignedType) *Typ = &pc->UnsignedIntType;
+            else if (Token == TokenLongType){
+              if ( FollowToken == TokenDoubleType)
+                *Typ = &pc->FP128Type;
+              else
+                *Typ = &pc->LongType;
+            }
+            else *Typ = &pc->IntType;
             
             return TRUE;
         }
-        
         Token = LexGetToken(Parser, &LexerValue, TRUE);
     }
-    
     switch (Token)
     {
         case TokenIntType: *Typ = Unsigned ? &pc->UnsignedIntType : &pc->IntType; break;
@@ -398,7 +396,9 @@ int TypeParseFront(struct ParseState *Parser, struct ValueType **Typ, int *IsSta
         case TokenCharType: *Typ = Unsigned ? &pc->UnsignedCharType : &pc->CharType; break;
         case TokenLongType: *Typ = Unsigned ? &pc->UnsignedLongType : &pc->LongType; break;
 #ifndef NO_FP
-        case TokenFloatType: case TokenDoubleType: *Typ = &pc->FPType; break;
+        case TokenFloatType: *Typ=&pc->FP32Type;break;
+        case TokenDoubleType: *Typ = &pc->FP64Type; break;
+        case TokenLongDoubleType: *Typ = &pc->FP128Type;break;
 #endif
         case TokenVoidType: *Typ = &pc->VoidType; break;
         

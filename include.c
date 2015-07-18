@@ -68,7 +68,6 @@ void PicocIncludeAllSystemHeaders(Picoc *pc)
 void IncludeFile(Picoc *pc, char *FileName)
 {
     struct IncludeLibrary *LInclude;
-    
     /* scan for the include file name to see if it's in our list of predefined includes */
     for (LInclude = pc->IncludeLibList; LInclude != NULL; LInclude = LInclude->NextLib)
     {
@@ -78,24 +77,19 @@ void IncludeFile(Picoc *pc, char *FileName)
             if (!VariableDefined(pc, FileName))
             {
                 VariableDefine(pc, NULL, FileName, NULL, &pc->VoidType, FALSE);
-                
                 /* run an extra startup function if there is one */
                 if (LInclude->SetupFunction != NULL)
                     (*LInclude->SetupFunction)(pc);
-                
                 /* parse the setup C source code - may define types etc. */
                 if (LInclude->SetupCSource != NULL)
                     PicocParse(pc, FileName, LInclude->SetupCSource, strlen(LInclude->SetupCSource), TRUE, TRUE, FALSE, FALSE);
-                
                 /* set up the library functions */
                 if (LInclude->FuncList != NULL)
                     LibraryAdd(pc, &pc->GlobalTable, FileName, LInclude->FuncList);
             }
-            
             return;
         }
     }
-    
     /* not a predefined file, read a real file */
     PicocPlatformScanFile(pc, FileName);
 }

@@ -128,7 +128,7 @@ void StdioFprintfWord(StdOutStream *Stream, const char *Format, unsigned long Va
 }
 
 /* printf-style format of a floating point number */
-void StdioFprintfFP(StdOutStream *Stream, const char *Format, double Value)
+void StdioFprintfFP64(StdOutStream *Stream, const char *Format, double Value)
 {
     if (Stream->FilePtr != NULL)
         Stream->CharCount += fprintf(Stream->FilePtr, Format, Value);
@@ -151,7 +151,30 @@ void StdioFprintfFP(StdOutStream *Stream, const char *Format, double Value)
         Stream->StrOutPtr += CCount;
     }
 }
-
+/* printf-style format of a floating point number */
+void StdioFprintfFP32(StdOutStream *Stream, const char *Format, float Value)
+{
+    if (Stream->FilePtr != NULL)
+        Stream->CharCount += fprintf(Stream->FilePtr, Format, Value);
+    
+    else if (Stream->StrOutLen >= 0)
+    {
+#ifndef WIN32
+        int CCount = snprintf(Stream->StrOutPtr, Stream->StrOutLen, Format, Value);
+#else
+        int CCount = _snprintf(Stream->StrOutPtr, Stream->StrOutLen, Format, Value);
+#endif
+		Stream->StrOutPtr += CCount;
+        Stream->StrOutLen -= CCount;
+        Stream->CharCount += CCount;
+    }
+    else
+    {
+        int CCount = sprintf(Stream->StrOutPtr, Format, Value);
+        Stream->CharCount += CCount;
+        Stream->StrOutPtr += CCount;
+    }
+}
 /* printf-style format of a pointer */
 void StdioFprintfPointer(StdOutStream *Stream, const char *Format, void *Value)
 {
@@ -215,9 +238,9 @@ int StdioBasePrintf(struct ParseState *Parser, FILE *Stream, char *StrOut, int S
                     case 'd': case 'i':     ShowType = &pc->IntType; break;     /* integer decimal */
                     case 'o': case 'u': case 'x': case 'X': ShowType = &pc->IntType; break; /* integer base conversions */
 #ifndef NO_FP
-                    case 'e': case 'E':     ShowType = &pc->FPType; break;      /* double, exponent form */
-                    case 'f': case 'F':     ShowType = &pc->FPType; break;      /* double, fixed-point */
-                    case 'g': case 'G':     ShowType = &pc->FPType; break;      /* double, flexible format */
+                    case 'e': case 'E':     ShowType = &pc->FP64Type; break;      /* double, exponent form */
+                    case 'f': case 'F':     ShowType = &pc->FP64Type; break;      /* double, fixed-point */
+                    case 'g': case 'G':     ShowType = &pc->FP64Type; break;      /* double, flexible format */
 #endif
                     case 'a': case 'A':     ShowType = &pc->IntType; break;     /* hexadecimal, 0x- format */
                     case 'c':               ShowType = &pc->IntType; break;     /* character */
@@ -273,14 +296,23 @@ int StdioBasePrintf(struct ParseState *Parser, FILE *Stream, char *StrOut, int S
                             StdioOutPuts("XXX", &SOStream);
                     }
 #ifndef NO_FP
-                    else if (ShowType == &pc->FPType)
+                    else if (ShowType == &pc->FP64Type)
                     {
                         /* show a floating point number */
                         if (IS_NUMERIC_COERCIBLE(ThisArg))
-                            StdioFprintfFP(&SOStream, OneFormatBuf, ExpressionCoerceFP(ThisArg));
+                            StdioFprintfFP64(&SOStream, OneFormatBuf, ExpressionCoerceFP64(ThisArg));
                         else
                             StdioOutPuts("XXX", &SOStream);
                     }                    
+                    else if (ShowType == &pc->FP32Type)
+                    {
+                        /* show a floating point number */
+                        if (IS_NUMERIC_COERCIBLE(ThisArg))
+                            StdioFprintfFP64(&SOStream, OneFormatBuf, ExpressionCoerceFP64(ThisArg));
+                        else
+                            StdioOutPuts("XXX", &SOStream);
+                    }                    
+
 #endif
                     else if (ShowType == pc->CharPtrType)
                     {
@@ -731,9 +763,12 @@ void PrintStr(const char *Str, FILE *Stream)
     fputs(Str, Stream);
 }
 
-void PrintFP(double Num, FILE *Stream)
+void PrintFP32(float Num, FILE *Stream)
 {
     fprintf(Stream, "%f", Num);
 }
-
+void PrintFP64(double  Num, FILE *Stream)
+{
+    fprintf(Stream, "%f", Num);
+}
 #endif /* !BUILTIN_MINI_STDLIB */

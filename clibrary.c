@@ -3,7 +3,7 @@
  
 #include "picoc.h"
 #include "interpreter.h"
-
+#include "dlfcn.h"
 
 /* endian-ness checking */
 static const int __ENDIAN_CHECK__ = 1;
@@ -14,19 +14,15 @@ static int LittleEndian;
 /* global initialisation for libraries */
 void LibraryInit(Picoc *pc)
 {
-    
     /* define the version number macro */
     pc->VersionString = TableStrRegister(pc, PICOC_VERSION);
     VariableDefinePlatformVar(pc, NULL, "PICOC_VERSION", pc->CharPtrType, (union AnyValue *)&pc->VersionString, FALSE);
-
     /* define endian-ness macros */
     BigEndian = ((*(char*)&__ENDIAN_CHECK__) == 0);
     LittleEndian = ((*(char*)&__ENDIAN_CHECK__) == 1);
-
     VariableDefinePlatformVar(pc, NULL, "BIG_ENDIAN", &pc->IntType, (union AnyValue *)&BigEndian, FALSE);
     VariableDefinePlatformVar(pc, NULL, "LITTLE_ENDIAN", &pc->IntType, (union AnyValue *)&LittleEndian, FALSE);
 }
-
 /* add a library */
 void LibraryAdd(Picoc *pc, struct Table *GlobalTable, const char *LibraryName, struct LibraryFunction *FuncList)
 {
@@ -37,7 +33,6 @@ void LibraryAdd(Picoc *pc, struct Table *GlobalTable, const char *LibraryName, s
     struct Value *NewValue;
     void *Tokens;
     char *IntrinsicName = TableStrRegister(pc, "c library");
-    
     /* read all the library definitions */
     for (Count = 0; FuncList[Count].Prototype != NULL; Count++)
     {
@@ -49,7 +44,9 @@ void LibraryAdd(Picoc *pc, struct Table *GlobalTable, const char *LibraryName, s
         HeapFreeMem(pc, Tokens);
     }
 }
-
+void DynamicLibraryAdd(Picoc *pc, struct Table *GlobalTable, const char *FileName){
+//    void *sym = dlopen(FileName,RTLD_NOW);
+}
 /* print a type to a stream without using printf/sprintf */
 void PrintType(struct ValueType *Typ, IOFILE *Stream)
 {
@@ -60,12 +57,18 @@ void PrintType(struct ValueType *Typ, IOFILE *Stream)
         case TypeShort:         PrintStr("short", Stream); break;
         case TypeChar:          PrintStr("char", Stream); break;
         case TypeLong:          PrintStr("long", Stream); break;
+        case TypeInt128:        PrintStr("__m128i",Stream);break;
         case TypeUnsignedInt:   PrintStr("unsigned int", Stream); break;
         case TypeUnsignedShort: PrintStr("unsigned short", Stream); break;
         case TypeUnsignedLong:  PrintStr("unsigned long", Stream); break;
         case TypeUnsignedChar:  PrintStr("unsigned char", Stream); break;
 #ifndef NO_FP
-        case TypeFP:            PrintStr("double", Stream); break;
+        case TypeFP32:          PrintStr("float", Stream); break;
+        case TypeFP64:          PrintStr("double", Stream); break;
+        case TypeFP128:         PrintStr("long double",Stream);break;
+        case TypeComplex32:     PrintStr("float complex",Stream);break;
+        case TypeComplex64:     PrintStr("double complex",Stream);break;
+        case TypeComplex128:    PrintStr("long double complex",Stream);break;
 #endif
         case TypeFunction:      PrintStr("function", Stream); break;
         case TypeMacro:         PrintStr("macro", Stream); break;

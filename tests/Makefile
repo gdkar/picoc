@@ -62,7 +62,7 @@ TESTS=	00_assignment.test \
 	66_printf_undefined.test \
 	67_macro_crash.test \
 	68_return.test \
-
+	69_single_precision.test 
 
 include csmith/Makefile
 

@@ -27,36 +27,25 @@ int main(int argc, char **argv)
                "        picoc -i                               : interactive mode\n");
         exit(1);
     }
-    
     PicocInitialise(&pc, StackSize);
-    
-    if (strcmp(argv[ParamCount], "-s") == 0 || strcmp(argv[ParamCount], "-m") == 0)
-    {
+    if (strcmp(argv[ParamCount], "-s") == 0 || strcmp(argv[ParamCount], "-m") == 0){
         DontRunMain = TRUE;
         PicocIncludeAllSystemHeaders(&pc);
         ParamCount++;
     }
-        
-    if (argc > ParamCount && strcmp(argv[ParamCount], "-i") == 0)
-    {
+    if (argc > ParamCount && strcmp(argv[ParamCount], "-i") == 0){
         PicocIncludeAllSystemHeaders(&pc);
         PicocParseInteractive(&pc);
-    }
-    else
-    {
-        if (PicocPlatformSetExitPoint(&pc))
-        {
+    }else{
+        if (PicocPlatformSetExitPoint(&pc)){
             PicocCleanup(&pc);
             return pc.PicocExitValue;
         }
-        
         for (; ParamCount < argc && strcmp(argv[ParamCount], "-") != 0; ParamCount++)
             PicocPlatformScanFile(&pc, argv[ParamCount]);
-        
         if (!DontRunMain)
             PicocCallMain(&pc, argc - ParamCount, &argv[ParamCount]);
     }
-    
     PicocCleanup(&pc);
     return pc.PicocExitValue;
 }
@@ -71,20 +60,12 @@ int main(int argc, char **argv)
 int picoc(char *SourceStr)
 {   
     char *pos;
-
     PicocInitialise(HEAP_SIZE);
-
-    if (SourceStr)
-    {
-        for (pos = SourceStr; *pos != 0; pos++)
-        {
-            if (*pos == 0x1a)
-            {
-                *pos = 0x20;
-            }
+    if (SourceStr){
+        for (pos = SourceStr; *pos != 0; pos++){
+            if (*pos == 0x1a){*pos = 0x20;}
         }
     }
-
     PicocExitBuf[40] = 0;
     PicocPlatformSetExitPoint();
     if (PicocExitBuf[40]) {
@@ -92,13 +73,10 @@ int picoc(char *SourceStr)
         PicocCleanup();
         return PicocExitValue;
     }
-
     if (SourceStr)   
         PicocParse("nofile", SourceStr, strlen(SourceStr), TRUE, TRUE, FALSE);
-
     PicocParseInteractive();
     PicocCleanup();
-    
     return PicocExitValue;
 }
 # endif
